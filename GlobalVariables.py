@@ -2,7 +2,7 @@
 from enum import Enum
 
 class FileLoc(Enum):
-    BASE = "C:/Users/dylan/Desktop/H2 Commissions/"
+    BASE = "../../"
     BACKUP = BASE + "Backup/"
     LOOKUP = BASE + "Lookup/"
     OUTPUT = BASE + "Output/"
