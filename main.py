@@ -5,7 +5,7 @@ import pandas as pd
 
 from PyQt5.uic import loadUi
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QApplication, QDialog, QFileDialog
+from PyQt5.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
 
 from ExcelHelper import ExcelHelper
 from GlobalVariables import FileLoc
@@ -174,12 +174,16 @@ class MainWindow(QDialog):
         # <= MAKE SURE WE HAVE ALL LOOKUP FILES READY =>
         excel_helper = ExcelHelper()
         lookup_helper = LookupHelper()
+        value_lookups = lookup_helper.files.values()
+        general_lookups = [FileLoc.FIELD_MAPPINGS.value, FileLoc.LOOKUP_MATRIX.value, FileLoc.FORMAT_MATRIX.value]
         lookup_files_ready = True
-        for file in lookup_helper.files.values():
-            if not os.path.exists(file.path):
+        for filepath in general_lookups + [file.path for file in value_lookups]:
+            filename = os.path.basename(filepath)
+            if not os.path.exists(filepath):
                 lookup_files_ready = False
-                print(f"> Cannot assign FSE. Lookup file {file.name} cannot be found."
+                print(f"> Cannot assign FSE. Lookup file {filename} cannot be found."
                       f" Please make sure file is in the Lookup directory.")
+        for file in value_lookups:
             if file.updatable:
                 if excel_helper.saveError(file.path):
                     lookup_files_ready = False
@@ -235,6 +239,86 @@ class MainWindow(QDialog):
     def addToMaster(self):
         """Add fse-assigned file to commissions master file"""
         print("..Adding to Commissions Master..")
+
+        self.lockButtons()
+
+        # <= MAKE SURE WE HAVE ALL FILES READY =>
+        # Start with lookup files
+        general_lookups = [FileLoc.FIELD_MAPPINGS.value, FileLoc.FORMAT_MATRIX.value]
+        lookup_files_ready = True
+        for filepath in general_lookups:
+            filename = os.path.basename(filepath)
+            if not os.path.exists(filepath):
+                lookup_files_ready = False
+                print(f"> Cannot add to master. Lookup file {filename} cannot be found."
+                      f" Please make sure file is in the Lookup directory.")
+        # Make sure we can edit and open the master file
+        excel_helper = ExcelHelper()
+        master_file_ready = True
+        if excel_helper.saveError(FileLoc.MASTER.value):
+            master_file_ready = False
+            print(f"> Cannot add to master. Master file is open."
+                  f" Please make sure file is not open in Excel.")
+        if lookup_files_ready and master_file_ready:
+
+            # <= CONFIRM USER WANTS TO ADD =>
+            reply = QMessageBox.question(self, "Confirm Add To Master",
+                                         f"Are you sure you would like to add"
+                                         f" {self.input_filename} to the"
+                                         f" commissions master file?",
+                                         QMessageBox.Yes | QMessageBox.No,
+                                         QMessageBox.No)
+            if reply == QMessageBox.No:
+                print(f"> Add to master not confirmed."
+                      f" Commissions master not updated.")
+            else:
+
+                # <= BACKUP MASTER FILE =>
+                excel_helper.backupFile(FileLoc.MASTER.value)
+
+                # <= LOAD MASTER FILE =>
+                master_df = pd.read_excel(FileLoc.MASTER.value, sheet_name=0).fillna("")
+
+                # <= MAKE SURE ALL INPUT AND MASTER COLUMNS ARE STANDARD =>
+                field_mappings = pd.read_excel(FileLoc.FIELD_MAPPINGS.value, sheet_name=0).fillna("")
+                input_columns = set(self.input_df.columns)
+                master_columns = set(master_df.columns)
+                field_mappings_columns = set(field_mappings.columns)
+                if input_columns != master_columns:
+                    missing = list(master_columns - input_columns)
+                    extra = list(input_columns - master_columns)
+                    print(f"> Add to master cancelled."
+                          f" Input file columns are not the"
+                          f" same as master file columns.\n"
+                          f" Missing columns: {missing}\n"
+                          f" Extra columns: {extra}")
+                elif master_columns != field_mappings_columns:
+                    missing = list(field_mappings_columns - master_columns)
+                    extra = list(master_columns - field_mappings_columns)
+                    print(f"> Add to master cancelled."
+                          f" Master file columns are not the"
+                          f" same as field mappings columns.\n"
+                          f" Missing columns: {missing}\n"
+                          f" Extra columns: {extra}")
+                else:
+
+                    # <= APPEND TO MASTER =>
+                    master_df = pd.concat([self.input_df, master_df])
+                    master_df = master_df.sort_values(by=['Upload Timestamp', 'Reported Customer'],
+                                                      ascending=[False, True],
+                                                      ignore_index=True)
+                    master_df = master_df.reset_index(drop=True)
+
+                    # <= EXPORT MASTER FILE =>
+                    column_widths = list(field_mappings.iloc[0])
+                    output_filepath = excel_helper.createFile(FileLoc.MASTER.value,
+                                                              dfs=[master_df],
+                                                              sheets=["Data"],
+                                                              widths=[column_widths])
+                    excel_helper.openFile(output_filepath)
+
+        self.unlockButtons()
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

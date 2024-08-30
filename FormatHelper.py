@@ -93,8 +93,6 @@ class FormatHelper:
                     customer = df.loc[i, 'Reported Customer']
                     # Read flag to determine color of highlight
                     lookup_flag = df.loc[i, 'Lookup Flag']
-                    if lookup_flag == "Root cust not in account list":
-                        pass
                     # Make sure our lookup flag is defined
                     try:
                         # Use predefined formatting based on lookup flag type

@@ -137,11 +137,13 @@ class LookupHelper:
         append_df.drop_duplicates(subset=key_col,
                                   keep='last',
                                   ignore_index=True)
+        append_df = append_df.reset_index(drop=True)
         # Append to file
         file.df = pd.concat([file.df, append_df])
         file.df = file.df.drop_duplicates(subset=key_col,
                                           keep='last',
                                           ignore_index=True)
+        file.df = file.df.reset_index(drop=True)
 
         # <= SORT FILE ROWS =>
         # Custom sort function: Place 'ENF' on top, everything else is sorted regularly
@@ -154,6 +156,7 @@ class LookupHelper:
                                       ignore_index=True,
                                       key=lambda col: col.map(sortEnfOnTop)
                                       if col.name == val_col else col)
+        file.df = file.df.reset_index(drop=True)
 
         # <= EXPORT UPDATED FILE =>
         # Get column widths from field mappings
