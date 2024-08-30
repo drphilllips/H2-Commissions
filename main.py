@@ -7,7 +7,10 @@ from PyQt5.uic import loadUi
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication, QDialog, QFileDialog
 
+from ExcelHelper import ExcelHelper
 from GlobalVariables import FileLoc
+from LookupHelper import LookupHelper
+from StandardizeHelper import StandardizeHelper
 
 VERSION = "Alpha v0.1"
 
@@ -30,6 +33,7 @@ class MainWindow(QDialog):
         # <= INITIALIZE WINDOW STATE =>
         # Initialize state variables
         self.input_filepath = ""
+        self.input_filename = ""
         self.input_df = None
         self.updated_lookup_files = {}
         # Create custom output stream
@@ -61,6 +65,7 @@ class MainWindow(QDialog):
     def resetStateVariables(self):
         """Reset app state variables"""
         self.input_filepath = ""
+        self.input_filename = ""
         self.input_df = None
         self.updated_lookup_files = {}
 
@@ -113,13 +118,13 @@ class MainWindow(QDialog):
 
             # <= UPDATE USER WITH STATUS =>
             # Print out the selected filename
-            filename = os.path.basename(self.input_filepath)
-            print("> File load complete: " + filename)
+            self.input_filename = os.path.basename(self.input_filepath)
+            print("> File load complete: " + self.input_filename)
             # Shorten filename if too long for selected files label
-            if len(filename) > 43:
-                filename = filename[:43] + "..."
+            if len(self.input_filename) > 43:
+                filename = self.input_filename[:43] + "..."
             # Update current file label
-            self.lbl_selected_file.setText("> " + filename)
+            self.lbl_selected_file.setText("> " + self.input_filename)
             # Enable buttons and drop-downs now that file is selected (or even if not selected)
             self.unlockButtons()
 
@@ -163,12 +168,73 @@ class MainWindow(QDialog):
 
     def assignFSE(self):
         """Assign FSE to each line of input commissions file"""
-        print("..Assigning FSE..")
+
+        self.lockButtons()
+
+        # <= MAKE SURE WE HAVE ALL LOOKUP FILES READY =>
+        excel_helper = ExcelHelper()
+        lookup_helper = LookupHelper()
+        lookup_files_ready = True
+        for file in lookup_helper.files.values():
+            if not os.path.exists(file.path):
+                lookup_files_ready = False
+                print(f"> Cannot assign FSE. Lookup file {file.name} cannot be found."
+                      f" Please make sure file is in the Lookup directory.")
+            if file.updatable:
+                if excel_helper.saveError(file.path):
+                    lookup_files_ready = False
+                    print(f"> Cannot assign FSE. Updatable lookup file {file.name} is open."
+                          f" Please make sure file is not open in Excel.")
+        if lookup_files_ready:
+
+            # <= PULL LINE AND DATE FROM FILENAME =>
+            try:
+                filename, ext = os.path.splitext(self.input_filename)
+                line, filedate = filename.split(sep="@")
+                proper_filename = True
+            except ValueError:
+                filename = None
+                line, filedate = None, None
+                proper_filename = False
+            # Make sure we have a proper filename
+            if not proper_filename:
+                print(f"> {self.input_filename} is an invalid input file name."
+                      f' Please use "<LINE>@<YYYY-MM-DD>.xlsx"')
+            else:
+
+                # <= BACKUP ALL UPDATABLE LOOKUP FILES =>
+                for file in lookup_helper.files.values():
+                    if file.updatable:
+                        excel_helper.backupFile(file.path)
+
+                # <= STANDARDIZE COLUMNS =>
+                print("..Standardizing Columns..")
+                standardize_helper = StandardizeHelper(line, filedate)
+                standard_df = standardize_helper.mapColumns(self.input_df)
+                standard_df = standardize_helper.preprocessColumns(standard_df)
+                standard_df = standardize_helper.generateColumns(standard_df)
+
+                # <= PERFORM LOOKUP ON STANDARD FILE =>
+                print("..Assigning FSE..")
+                lookup_helper.setStandardizeHelper(standardize_helper)
+                lookup_helper.setExcelHelper(excel_helper)
+                fse_df = lookup_helper.performLookup(standard_df, 'FSE Code')
+
+                # <= EXPORT FILE TO EXCEL =>
+                # Create output filepath
+                output_filepath = f"{FileLoc.OUTPUT.value}{filename}_(FSE)_{{" +\
+                                  standardize_helper.upload_timestamp + "}.xlsx"
+                excel_helper.createFile(output_filepath,
+                                        dfs=[fse_df],
+                                        sheets=['Data'],
+                                        widths=[standardize_helper.column_widths])
+                excel_helper.openFile(output_filepath)
+
+        self.unlockButtons()
 
     def addToMaster(self):
         """Add fse-assigned file to commissions master file"""
         print("..Adding to Commissions Master..")
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
