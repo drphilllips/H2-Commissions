@@ -78,6 +78,7 @@ class ExcelHelper:
             :param widths: Array of column width arrays for each sheet
             :return: Create file and return New filepath
             """
+        filepath = os.path.abspath(filepath)
         filename = os.path.basename(filepath)
         print(f"..Creating {filename}..")
 

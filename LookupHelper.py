@@ -90,7 +90,7 @@ class LookupHelper:
                                     if file.number not in files_enf:
                                         files_enf.append(file.number)
                             # If we had a bad key, set previous file's val invalid
-                            if step_index > 0:
+                            if key not in ['ENF', 'ZZ'] and step_index > 0:
                                 previous_file = self.files[path[step_index - 1]]
                                 if previous_file.updatable:
                                     if key not in previous_file.invalid_vals:
@@ -101,7 +101,7 @@ class LookupHelper:
                                 lookup_output = ""
                             break
                 # Break once we have an output
-                if lookup_output and lookup_output != "ENF":
+                if lookup_output and lookup_output not in ["ENF", "ZZ"]:
                     lookup_df.loc[i, value] = lookup_output
                     break
             # Save whatever flags were raised

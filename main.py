@@ -225,6 +225,11 @@ class MainWindow(QDialog):
                 fse_df = lookup_helper.performLookup(standard_df, 'FSE Code')
 
                 # <= EXPORT FILE TO EXCEL =>
+                # Sort file
+                fse_df = fse_df.sort_values(by='Reported Customer',
+                                            ascending=True,
+                                            ignore_index=True)
+                fse_df = fse_df.reset_index(drop=True)
                 # Create output filepath
                 output_filepath = f"{FileLoc.OUTPUT.value}{filename}_(FSE)_{{" +\
                                   standardize_helper.upload_timestamp + "}.xlsx"
@@ -301,6 +306,18 @@ class MainWindow(QDialog):
                           f" Missing columns: {missing}\n"
                           f" Extra columns: {extra}")
                 else:
+
+                    # <= CLEAR OUT ANY IDENTICAL LINE/FILEDATE DATA =>
+                    unique_id_cols = ['Line', 'File Date']
+                    file_unique_id = list(self.input_df[unique_id_cols].iloc[0])
+                    # Create a condition that identifies rows to remove
+                    condition = pd.Series([True] * len(master_df), dtype=bool)
+                    for col, val in zip(unique_id_cols, file_unique_id):
+                        condition = condition & (master_df[col] == val)
+                    # Remove rows where condition is True
+                    master_df = master_df[~condition]
+                    print(f"> Removed previous {'@'.join(file_unique_id)}"
+                          f" data from master file.")
 
                     # <= APPEND TO MASTER =>
                     master_df = pd.concat([self.input_df, master_df])
