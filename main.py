@@ -240,6 +240,7 @@ class MainWindow(QDialog):
                 excel_helper.openFile(output_filepath)
 
         self.unlockButtons()
+        self.deselectFile()
 
     def addToMaster(self):
         """Add fse-assigned file to commissions master file"""
@@ -335,6 +336,7 @@ class MainWindow(QDialog):
                     excel_helper.openFile(output_filepath)
 
         self.unlockButtons()
+        self.deselectFile()
 
 
 if __name__ == "__main__":
